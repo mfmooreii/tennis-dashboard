@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tennis Dashboard</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0a0a0f;
+      color: #e0e0e0;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      padding: 24px;
+      min-height: 100vh;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 28px;
+      border-bottom: 1px solid #1e1e2e;
+      padding-bottom: 16px;
+    }
+
+    header h1 { font-size: 18px; font-weight: 600; color: #fff; letter-spacing: 0.05em; }
+    #last-updated { font-size: 11px; color: #555; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+
+    .panel {
+      background: #111118;
+      border: 1px solid #1e1e2e;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 12px 16px;
+      background: #16161f;
+      border-bottom: 1px solid #1e1e2e;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #888;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .panel-header .count {
+      background: #1e1e2e;
+      color: #666;
+      border-radius: 10px;
+      padding: 2px 8px;
+      font-size: 10px;
+    }
+
+    .match-row {
+      padding: 12px 16px;
+      border-bottom: 1px solid #16161f;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .match-row:last-child { border-bottom: none; }
+    .match-row:hover { background: #16161f; }
+
+    .match-row.suspended {
+      border-left: 3px solid #f59e0b;
+      background: rgba(245, 158, 11, 0.05);
+    }
+
+    .match-names { flex: 1; font-size: 13px; color: #ccc; line-height: 1.6; }
+    .match-names .vs { color: #444; font-size: 10px; display: block; }
+
+    .match-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+
+    .status-badge {
+      font-size: 10px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .status-badge.suspended   { background: #451a03; color: #f59e0b; }
+    .status-badge.in-progress { background: #052e16; color: #4ade80; }
+    .status-badge.scheduled   { background: #1e1e2e; color: #888; }
+    .status-badge.final       { background: #1e1e2e; color: #555; }
+
+    .score { font-size: 12px; color: #666; }
+
+    .position-row {
+      padding: 12px 16px;
+      border-bottom: 1px solid #16161f;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .position-row:last-child { border-bottom: none; }
+    .position-row:hover { background: #16161f; }
+
+    .position-row.has-alert {
+      border-left: 3px solid #f59e0b;
+      background: rgba(245, 158, 11, 0.05);
+    }
+
+    .position-title { font-size: 12px; color: #ccc; line-height: 1.4; }
+    .position-outcome { font-size: 10px; color: #666; margin-top: 2px; }
+
+    .position-pnl { font-size: 12px; font-weight: 600; text-align: right; }
+    .position-pnl.positive { color: #4ade80; }
+    .position-pnl.negative { color: #f87171; }
+    .position-pnl.neutral  { color: #888; }
+
+    .alert-tag {
+      font-size: 9px;
+      background: #451a03;
+      color: #f59e0b;
+      padding: 2px 6px;
+      border-radius: 3px;
+      margin-top: 4px;
+      display: inline-block;
+    }
+
+    .empty { padding: 24px 16px; font-size: 12px; color: #444; text-align: center; }
+
+    .pulse {
+      display: inline-block;
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: #4ade80;
+      margin-right: 6px;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.3; }
+    }
+
+    .suspended-banner {
+      display: none;
+      background: #451a03;
+      border: 1px solid #92400e;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 20px;
+      font-size: 13px;
+      color: #fbbf24;
+    }
+
+    .suspended-banner.visible { display: block; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1><span class="pulse"></span>Tennis Dashboard</h1>
+  <span id="last-updated">Loading...</span>
+</header>
+
+<div id="suspended-banner" class="suspended-banner"></div>
+
+<div class="grid">
+  <div class="panel">
+    <div class="panel-header">
+      Live Matches
+      <span class="count" id="match-count">—</span>
+    </div>
+    <div id="matches-list"><div class="empty">Fetching matches...</div></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-header">
+      My Positions
+      <span class="count" id="position-count">—</span>
+    </div>
+    <div id="positions-list"><div class="empty">Fetching positions...</div></div>
+  </div>
+</div>
+
+<script>
+  const WALLET = "0x7b0F7765e927a4eBB6E610d778d8e68f6e7F7aAc";
+  const TENNIS_API_KEY = "b3b8d5c8ef4095fd443c95c98ceddb8347a58a84a00ab39e70962ec890ae35ec";
+  const NTFY_CHANNEL = "mfmoore-tennis";
+  const REFRESH_MS = 60000;
+
+  let matches = [];
+  let positions = [];
+  const alertedIds = new Set();
+
+  async function notify(title, body) {
+    // Browser notification
+    if (Notification.permission === "granted") {
+      new Notification(title, { body });
+    }
+    // ntfy.sh push
+    try {
+      await fetch(`https://ntfy.sh/${NTFY_CHANNEL}`, {
+        method: "POST",
+        headers: { "Title": title, "Priority": "high", "Tags": "tennis,warning" },
+        body,
+      });
+    } catch (e) {
+      console.warn("ntfy error:", e);
+    }
+  }
+
+  async function requestNotificationPermission() {
+    if (Notification.permission === "default") {
+      await Notification.requestPermission();
+    }
+  }
+
+  function statusClass(status) {
+    const s = (status || "").toLowerCase();
+    if (s.includes("suspend") || s.includes("delay") || s.includes("interrupt")) return "suspended";
+    if (s.includes("progress") || s.includes("live")) return "in-progress";
+    if (s.includes("final") || s.includes("finish") || s.includes("end")) return "final";
+    return "scheduled";
+  }
+
+  function isSuspended(status) {
+    const s = (status || "").toLowerCase();
+    return s.includes("suspend") || s.includes("delay") || s.includes("rain") || s.includes("interrupt");
+  }
+
+  function matchesPosition(pos, match) {
+    const title = (pos.title || "").toLowerCase();
+    const outcome = (pos.outcome || "").toLowerCase();
+    for (const player of match.players) {
+      const lastName = player.split(" ").pop().toLowerCase();
+      if (lastName.length > 2 && (title.includes(lastName) || outcome.includes(lastName))) return true;
+    }
+    return false;
+  }
+
+  async function fetchESPN() {
+    const tours = ["atp", "wta"];
+    const all = [];
+    for (const tour of tours) {
+      try {
+        const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/tennis/${tour}/scoreboard`);
+        const data = await res.json();
+        for (const event of (data.events || [])) {
+          const comp = (event.competitions || [{}])[0];
+          const competitors = comp.competitors || [];
+          const statusType = event.status?.type || {};
+          all.push({
+            id: "espn-" + event.id,
+            name: event.name || "",
+            status: statusType.name || statusType.description || "",
+            players: competitors.map(c => c.athlete?.displayName || c.displayName || ""),
+            scores: competitors.map(c => c.score || ""),
+            tour: tour.toUpperCase(),
+          });
+        }
+      } catch (e) {
+        console.warn("ESPN fetch error:", e);
+      }
+    }
+    return all;
+  }
+
+  async function fetchITF() {
+    try {
+      const res = await fetch(`https://api.api-tennis.com/tennis/?method=get_livescore&APIkey=${TENNIS_API_KEY}`);
+      const data = await res.json();
+      return (data.result || []).map(m => {
+        const s = (m.event_status || "").toLowerCase();
+        let status = "In Progress";
+        if (s.includes("suspend") || s.includes("delay") || s.includes("interrupt") || s.includes("rain")) status = "Suspended";
+        else if (s.includes("finish") || s.includes("ended") || s === "ft") status = "Final";
+        else if (!m.event_live || m.event_live === "0") status = "Scheduled";
+        return {
+          id: "itf-" + m.event_key,
+          name: m.tournament_round || "",
+          status,
+          players: [m.event_first_player || "", m.event_second_player || ""],
+          scores: [m.event_final_result ? m.event_final_result.split(" - ")[0] : "", m.event_final_result ? m.event_final_result.split(" - ")[1] : ""],
+          tour: m.tournament_name || "ITF",
+        };
+      });
+    } catch (e) {
+      console.warn("api-tennis fetch error:", e);
+      return [];
+    }
+  }
+
+  async function fetchTennis() {
+    const [espn, itf] = await Promise.all([fetchESPN(), fetchITF()]);
+    return [...espn, ...itf];
+  }
+
+  async function fetchPositions() {
+    try {
+      const res = await fetch(`https://data-api.polymarket.com/positions?user=${WALLET}&sizeThreshold=0`);
+      const data = await res.json();
+      return (data || []).map(p => ({
+        title: p.title || p.market || "",
+        outcome: p.outcome || "",
+        size: p.size || 0,
+        currentValue: p.currentValue || 0,
+        initialValue: p.initialValue || 0,
+      }));
+    } catch (e) {
+      console.warn("Polymarket fetch error:", e);
+      return [];
+    }
+  }
+
+  function renderMatches() {
+    const list = document.getElementById("matches-list");
+    document.getElementById("match-count").textContent = matches.length;
+
+    if (!matches.length) {
+      list.innerHTML = '<div class="empty">No live matches right now</div>';
+      return;
+    }
+
+    list.innerHTML = matches.map(m => {
+      const sc = statusClass(m.status);
+      const players = m.players.length >= 2
+        ? `${m.players[0]}<span class="vs">vs</span>${m.players[1]}`
+        : m.name;
+      const scoreStr = m.scores.filter(Boolean).join(" — ");
+      return `
+        <div class="match-row ${sc}">
+          <div class="match-names">${players}</div>
+          <div class="match-right">
+            <span class="status-badge ${sc}">${m.status || "Scheduled"}</span>
+            ${scoreStr ? `<span class="score">${scoreStr}</span>` : ""}
+          </div>
+        </div>`;
+    }).join("");
+  }
+
+  function renderPositions() {
+    const list = document.getElementById("positions-list");
+    document.getElementById("position-count").textContent = positions.length;
+
+    if (!positions.length) {
+      list.innerHTML = '<div class="empty">No open positions found</div>';
+      return;
+    }
+
+    const suspendedMatches = matches.filter(m => isSuspended(m.status));
+
+    list.innerHTML = positions.map(p => {
+      const linked = suspendedMatches.find(m => matchesPosition(p, m));
+      const pnl = (p.currentValue || 0) - (p.initialValue || 0);
+      const pnlClass = pnl > 0 ? "positive" : pnl < 0 ? "negative" : "neutral";
+      const pnlStr = pnl >= 0 ? `+$${pnl.toFixed(2)}` : `-$${Math.abs(pnl).toFixed(2)}`;
+      return `
+        <div class="position-row ${linked ? "has-alert" : ""}">
+          <div>
+            <div class="position-title">${p.title || "Unknown Market"}</div>
+            <div class="position-outcome">${p.outcome || ""}</div>
+            ${linked ? `<span class="alert-tag">⚠ MATCH SUSPENDED</span>` : ""}
+          </div>
+          <div class="position-pnl ${pnlClass}">${pnlStr}</div>
+        </div>`;
+    }).join("");
+  }
+
+  function updateBanner() {
+    const banner = document.getElementById("suspended-banner");
+    const alerts = matches
+      .filter(m => isSuspended(m.status))
+      .filter(m => positions.some(p => matchesPosition(p, m)));
+
+    if (alerts.length) {
+      banner.textContent = `⚠ ${alerts.length} match(es) tied to your positions are currently suspended.`;
+      banner.classList.add("visible");
+    } else {
+      banner.classList.remove("visible");
+    }
+
+    for (const m of alerts) {
+      if (!alertedIds.has(m.id)) {
+        alertedIds.add(m.id);
+        const players = m.players.filter(Boolean).join(" vs ");
+        notify("Match Suspended ⚠", `${players} (${m.tour}) — check your Polymarket position`);
+      }
+    }
+  }
+
+  async function refresh() {
+    [matches, positions] = await Promise.all([fetchTennis(), fetchPositions()]);
+    renderMatches();
+    renderPositions();
+    updateBanner();
+    document.getElementById("last-updated").textContent =
+      "Updated " + new Date().toLocaleTimeString();
+  }
+
+  requestNotificationPermission();
+  refresh();
+  setInterval(refresh, REFRESH_MS);
+</script>
+</body>
+</html>

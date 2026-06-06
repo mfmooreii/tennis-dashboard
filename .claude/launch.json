@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "tennis-dashboard",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["/Users/matthew/Desktop/tennis-dashboard/server.py"],
+      "cwd": "/Users/matthew/Desktop/tennis-dashboard",
+      "port": 8765
+    }
+  ]
+}
